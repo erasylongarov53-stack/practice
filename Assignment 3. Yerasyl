@@ -1,0 +1,68 @@
+import numpy as np
+import pandas as pd
+
+def compute_bayes(p_hazard, p_sensor_given_hazard=0.90, p_sensor_given_safe=0.10):
+    p_safe = 1.0 - p_hazard
+    p_sensor = (p_sensor_given_hazard * p_hazard) + (p_sensor_given_safe * p_safe)
+    p_hazard_given_sensor = (p_sensor_given_hazard * p_hazard) / p_sensor
+    return p_hazard_given_sensor, p_sensor
+
+def run_sensitivity_analysis(priors=[0.05, 0.20, 0.50, 0.80]):
+    results = []
+    for p_h in priors:
+        p_post, p_e = compute_bayes(p_h, p_sensor_given_hazard=0.90, p_sensor_given_safe=0.10)
+        results.append({
+            "Бастапқы P(H)": p_h,
+            "P(ALARM)": round(p_e, 4),
+            "Жаңартылған P(H|ALARM)": round(p_post, 4),
+            "Пайызбен (%)": f"{p_post * 100:.2f}%"
+        })
+    return pd.DataFrame(results)
+
+class HMMFilter:
+    def __init__(self, initial_hazard=0.20):
+        self.state = np.array([initial_hazard, 1.0 - initial_hazard])
+        
+        self.A = np.array([
+            [0.80, 0.20],
+            [0.10, 0.90]
+        ])
+        
+        self.B = {
+            'ALARM':  np.array([0.90, 0.10]),
+            'NORMAL': np.array([0.10, 0.90])
+        }
+
+    def filter_sequence(self, obs_sequence):
+        history = []
+        
+        for t, obs in enumerate(obs_sequence, start=1):
+            pred_state = self.state @ self.A
+            
+            likelihood = self.B[obs]
+            unnormalized = pred_state * likelihood
+            
+            evidence = np.sum(unnormalized)
+            self.state = unnormalized / evidence
+            
+            history.append({
+                "Уақыт": f"t{t}",
+                "Бақылау": obs,
+                "Болжанған P(H)": round(pred_state[0], 4),
+                "Жаңартылған P(H)": round(self.state[0], 4),
+                "Болжанған P(S)": round(pred_state[1], 4),
+                "Жаңартылған P(S)": round(self.state[1], 4)
+            })
+            
+        return pd.DataFrame(history)
+
+if __name__ == "__main__":
+    print("=== 1. СЕЗІМТАЛДЫҚ ТАЛДАУЫ ===")
+    df_sensitivity = run_sensitivity_analysis()
+    print(df_sensitivity.to_string(index=False))
+    
+    print("\n=== 2. HMM СҮЗГІЛЕУ (t1 - t4) ===")
+    observations = ['ALARM', 'NORMAL', 'ALARM', 'ALARM']
+    hmm = HMMFilter(initial_hazard=0.20)
+    df_hmm = hmm.filter_sequence(observations)
+    print(df_hmm.to_string(index=False))

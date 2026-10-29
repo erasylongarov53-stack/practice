@@ -1,0 +1,14 @@
+states = ["A", "B", "C"]
+T = [[0.7, 0.3, 0.0], [0.2, 0.6, 0.2], [0.0, 0.3, 0.7]]
+emission = {"RED": [0.8, 0.5, 0.2], "BLUE": [0.2, 0.5, 0.8]}
+belief = [0.5, 0.3, 0.2]
+readings = ["RED", "BLUE", "BLUE", "RED"]
+def predict(b, T):
+ return [sum(b[i] * T[i][j] for i in range(3)) for j in range(3)]
+def update(pred, likelihood):
+ weights = [pred[i] * likelihood[i] for i in range(3)]
+ total = sum(weights)
+ return [w / total for w in weights]
+for reading in readings:
+ belief = update(predict(belief, T), emission[reading])
+ print(reading, [round(v, 4) for v in belief])
